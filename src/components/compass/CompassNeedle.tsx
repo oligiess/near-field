@@ -1,10 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import Svg, { G, Polygon } from 'react-native-svg';
-import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
+import Svg, { Polygon } from 'react-native-svg';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { NEEDLE_ANIMATION_DURATION_MS } from '../../constants/config';
 import { shortestRotationDelta } from '../../lib/geo/bearing';
-
-const AnimatedG = Animated.createAnimatedComponent(G);
 
 interface CompassNeedleProps {
   size: number;
@@ -27,8 +25,14 @@ export function CompassNeedle({ size, rotationDeg }: CompassNeedleProps) {
     });
   }, [rotationDeg, displayRotation]);
 
-  const animatedProps = useAnimatedProps(() => ({
-    rotation: displayRotation.value,
+  // Rotating a plain View's transform style (rather than an animated prop
+  // inside the SVG itself) is what actually works reliably with Reanimated:
+  // react-native-svg computes rotation into a native transform matrix during
+  // React's normal render pass, which Reanimated's direct prop mutation
+  // bypasses, so an animated `rotation` prop on an SVG <G> never visibly
+  // updates. Rotating the wrapping View sidesteps that entirely.
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${displayRotation.value}deg` }],
   }));
 
   const center = size / 2;
@@ -37,8 +41,8 @@ export function CompassNeedle({ size, rotationDeg }: CompassNeedleProps) {
   const halfWidth = size * 0.055;
 
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <AnimatedG origin={`${center}, ${center}`} animatedProps={animatedProps}>
+    <Animated.View style={[{ width: size, height: size }, animatedStyle]}>
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <Polygon
           points={`${center},${tipInset} ${center - halfWidth},${center} ${center + halfWidth},${center}`}
           fill="#e63946"
@@ -47,7 +51,7 @@ export function CompassNeedle({ size, rotationDeg }: CompassNeedleProps) {
           points={`${center},${size - tailInset} ${center - halfWidth},${center} ${center + halfWidth},${center}`}
           fill="#1d3557"
         />
-      </AnimatedG>
-    </Svg>
+      </Svg>
+    </Animated.View>
   );
 }

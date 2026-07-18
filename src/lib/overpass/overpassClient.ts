@@ -27,17 +27,27 @@ export interface FetchFieldsResult {
 }
 
 // Both tags are included since OSM tags this sport inconsistently by region.
-const SPORT_FILTER = '["leisure"="pitch"]["sport"~"^(soccer|football)$"]';
+// Exact-match clauses are used instead of a single regex filter (e.g.
+// ["sport"~"^(soccer|football)$"]) because Overpass evaluates regex filters
+// with a full scan rather than an index lookup — in testing, the regex form
+// reliably timed out (504) on the public instance, while the equivalent
+// exact-match clauses returned in ~4s.
+const ELEMENT_TYPES = ['node', 'way', 'relation'] as const;
+const SPORT_VALUES = ['soccer', 'football'] as const;
 
 function buildQuery(center: Coordinates, radiusMeters: number): string {
   const { lat, lon } = center;
   const around = `(around:${radiusMeters},${lat},${lon})`;
+  const clauses = ELEMENT_TYPES.flatMap((type) =>
+    SPORT_VALUES.map(
+      (sport) => `  ${type}["leisure"="pitch"]["sport"="${sport}"]${around};`
+    )
+  ).join('\n');
+
   return `
 [out:json][timeout:${OVERPASS_TIMEOUT_SEC}];
 (
-  node${SPORT_FILTER}${around};
-  way${SPORT_FILTER}${around};
-  relation${SPORT_FILTER}${around};
+${clauses}
 );
 out center;
 `.trim();
